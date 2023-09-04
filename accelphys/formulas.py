@@ -1,4 +1,4 @@
-from typing import Union
+from typing import List, Union
 import numpy as np
 from scipy.constants import c
 
@@ -25,16 +25,18 @@ class Relativistic:
         :param p: momentum in GeV/c
         :param e_0: rest energy in GeV
         """
-        if v is not None:
-            return 1 / np.sqrt(1 - (v**2 / c**2))
-        elif beta is not None:
-            return 1 / np.sqrt(1 - beta**2)
-        elif (q and p and e_0) is not None:
-            return np.sqrt(((p * q) / e_0) ** 2 + 1)
-        else:
-            raise ValueError(
-                "You have not provided enough information to calculate beta."
-            )
+        valid_combinations = [[v], [beta], [q, p, e_0]]
+        index = cls._check_only_one_valid_comb(valid_combinations)
+
+        match index:
+            case 0:
+                return 1 / np.sqrt(1 - (v**2 / c**2))
+            case 1:
+                return 1 / np.sqrt(1 - beta**2)
+            case 2:
+                return np.sqrt(((p * q) / e_0) ** 2 + 1)
+            case _:
+                raise ValueError("Error in valid_combinations definition")
 
     @classmethod
     def beta(
@@ -57,21 +59,24 @@ class Relativistic:
         :param m: atomic mass in atomic mass unit
         :param q: charge in elementary charge
         """
-        if v is not None:
-            return v / c
-        elif gamma is not None:
-            return np.sqrt(1 - 1 / gamma**2)
-        elif (b_rho and q and m) is not None:
-            amu = 0.931493614838934  # GeV/c^2
-            p = b_rho * 0.33
-            e_0 = m * amu  # GeV
-            return np.sqrt(1 - 1 / cls.gamma(p=p, q=q, e_0=e_0) ** 2)
-        else:
-            raise ValueError(
-                "You have not provided enough information to calculate beta."
-            )
 
-    @staticmethod
+        valid_combinations = [[v], [gamma], [b_rho, q, m]]
+        index = cls._check_only_one_valid_comb(valid_combinations)
+
+        match index:
+            case 0:
+                return v / c
+            case 1:
+                return np.sqrt(1 - 1 / gamma**2)
+            case 2:
+                amu = 0.931493614838934  # GeV/c^2
+                p = b_rho * 0.33
+                e_0 = m * amu  # GeV
+                return np.sqrt(1 - 1 / cls.gamma(p=p, q=q, e_0=e_0) ** 2)
+            case _:
+                raise ValueError("Error in valid_combinations definition")
+
+    @classmethod
     def b_rho(
         p: Union[float, np.ndarray] = None,
         q: float = None,
@@ -80,14 +85,48 @@ class Relativistic:
     ) -> Union[float, np.ndarray]:
         return p / q
 
-    @staticmethod
+    @classmethod
     def p_momentum(
+        cls,
         e_tot: Union[float, np.ndarray] = None,
         e_0: float = None,
         q: float = None,
         b_rho: Union[float, np.ndarray] = None,
     ) -> Union[float, np.ndarray]:
-        if (e_0 and e_tot) is not None:
-            return np.sqrt(e_tot**2 - e_0**2) / c
-        elif (b_rho and q) is not None:
-            return b_rho * q
+        valid_combinations = [[e_tot, e_0], [b_rho, q]]
+        index = cls._check_only_one_valid_comb(valid_combinations)
+
+        match index:
+            case 0:
+                return np.sqrt(e_tot**2 - e_0**2) / c
+            case 1:
+                return b_rho * q
+            case _:
+                raise ValueError("Error in valid_combinations definition")
+
+    @classmethod
+    def _check_only_one_valid_comb(
+        cls, valid_combinations: List[List[Union[float, np.ndarray]]]
+    ) -> int:
+        """
+        Makes sure only one of the valid input combinations is passed.
+
+        Args:
+            valid_combinations (List[List[Union[float, np.ndarray]]]): Combin. to check
+
+        Returns:
+            int: index of the combination that is valid
+        """
+        # make sure only one valid combination is passed
+        num_valids = 0
+        valid_index = None
+
+        for i, comb in enumerate(valid_combinations):
+            if all([_param is not None for _param in comb]):
+                num_valids += 1
+                valid_index = i
+
+        if num_valids != 1:
+            raise ValueError("You must specify exactly one combination of parameters")
+
+        return valid_index
